@@ -22,10 +22,10 @@ export default function Login() {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", cred.user.uid));
 
-      // Akun tidak ada di Firestore
+      // Akun tidak ada di Firestore — buat dokumen darurat
       if (!snap.exists()) {
         await signOut(auth);
-        setError("Email atau password tidak terdaftar.");
+        setError("Akun ditemukan tapi data tidak lengkap. Silakan daftar ulang.");
         setLoading(false);
         return;
       }

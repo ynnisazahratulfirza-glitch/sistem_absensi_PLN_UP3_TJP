@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, collection, getDocs, query, where, getDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
 
 export default function Register() {
@@ -10,9 +10,9 @@ export default function Register() {
   const [form, setForm] = useState({
     nama: "", nip: "", jabatan: "", email: "", password: "", password2: "",
   });
-  const [error,   setError]   = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error,    setError]    = useState("");
+  const [success,  setSuccess]  = useState("");
+  const [loading,  setLoading]  = useState(false);
   const [showPass, setShowPass] = useState(false);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -26,38 +26,12 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // Buat akun Firebase Auth
+      // 1. Buat akun Firebase Auth
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      const uid  = cred.user.uid;
 
-      // Cek batas 4 user aktif
-      const usersSnap = await getDocs(
-        query(collection(db, "users"), where("role", "==", "user"))
-      );
-      const aktif = usersSnap.docs.filter(
-        (d) => d.data().status !== "deleted" && d.data().status !== "nonaktif"
-      );
-      if (aktif.length >= 4) {
-        await cred.user.delete();
-        setError("Batas maksimal 4 user aktif sudah tercapai. Hubungi admin.");
-        setLoading(false);
-        return;
-      }
-
-      // Cek NIP duplikat
-      const nipSnap = await getDocs(
-        query(collection(db, "users"), where("nip", "==", form.nip))
-      );
-      if (!nipSnap.empty) {
-        await cred.user.delete();
-        setError("NIP sudah terdaftar!");
-        setLoading(false);
-        return;
-      }
-
-      // Simpan ke Firestore
-      await setDoc(doc(db, "users", uid), {
-        uid,
+      // 2. Simpan data ke Firestore (simpel, tanpa query dulu)
+      await setDoc(doc(db, "users", cred.user.uid), {
+        uid:       cred.user.uid,
         nama:      form.nama,
         nip:       form.nip,
         jabatan:   form.jabatan,
@@ -72,20 +46,18 @@ export default function Register() {
       setTimeout(() => navigate("/login"), 2000);
 
     } catch (err) {
+      console.error("Register error:", err.code, err.message);
       if (err.code === "auth/email-already-in-use") {
-        setError("Email sudah terdaftar. Gunakan email lain atau langsung login.");
+        setError("Email sudah terdaftar. Silakan login atau gunakan email lain.");
       } else if (err.code === "auth/invalid-email") {
         setError("Format email tidak valid!");
       } else if (err.code === "auth/weak-password") {
-        setError("Password terlalu lemah. Minimal 6 karakter.");
+        setError("Password terlalu lemah. Gunakan minimal 6 karakter.");
       } else if (err.code === "auth/network-request-failed") {
-        setError("Gagal koneksi. Periksa internet Anda.");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Terlalu banyak percobaan. Tunggu beberapa menit.");
+        setError("Tidak ada koneksi internet. Coba lagi.");
       } else {
-        setError("Gagal mendaftar: " + (err.code || err.message || "Coba lagi."));
+        setError("Gagal mendaftar (" + (err.code || err.message) + ")");
       }
-      console.error("Register error:", err.code, err.message);
     } finally {
       setLoading(false);
     }
