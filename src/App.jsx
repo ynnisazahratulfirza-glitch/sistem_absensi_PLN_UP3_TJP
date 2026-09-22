@@ -9,7 +9,7 @@
 
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./lib/firebase";
 import logoPLN from "./assets/images (5).jpg";
@@ -61,9 +61,21 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
-        const snap = await getDoc(doc(db, "users", u.uid));
-        setUser(u);
-        setRole(snap.exists() ? snap.data().role : null);
+        try {
+          const snap = await getDoc(doc(db, "users", u.uid));
+          if (snap.exists()) {
+            setUser(u);
+            setRole(snap.data().role);
+          } else {
+            // Dokumen user tidak ada (mungkin dihapus admin)
+            await signOut(auth);
+            setUser(null);
+            setRole(null);
+          }
+        } catch {
+          setUser(null);
+          setRole(null);
+        }
       } else {
         setUser(null);
         setRole(null);

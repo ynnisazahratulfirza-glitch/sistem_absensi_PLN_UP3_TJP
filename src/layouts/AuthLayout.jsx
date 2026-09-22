@@ -1,6 +1,6 @@
 import { Outlet, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import logoPLN from "../assets/images (5).jpg";
@@ -24,9 +24,18 @@ export default function AuthLayout() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
-        const snap = await getDoc(doc(db, "users", u.uid));
-        const r = snap.exists() ? snap.data().role : null;
-        setRedirect(r === "admin" ? "/admin" : "/user");
+        try {
+          const snap = await getDoc(doc(db, "users", u.uid));
+          if (snap.exists()) {
+            const r = snap.data().role;
+            setRedirect(r === "admin" ? "/admin" : "/user");
+          } else {
+            // User dihapus dari Firestore, logout
+            await signOut(auth);
+          }
+        } catch {
+          // ignore
+        }
       }
       setChecking(false);
     });
