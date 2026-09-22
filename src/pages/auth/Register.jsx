@@ -1,9 +1,11 @@
-// pages/auth/Register.jsx - v2
+// pages/auth/Register.jsx - v3 FINAL
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default function Register() {
   const navigate = useNavigate();
@@ -26,24 +28,28 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // 1. Buat akun Firebase Auth
+      // Step 1: Buat akun di Firebase Auth
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const uid = cred.user.uid;
 
-      // 2. Paksa refresh token — pastikan Firestore sudah dapat auth token
+      // Step 2: Tunggu token propagasi ke Firestore (penting!)
       await cred.user.getIdToken(true);
+      await sleep(500);
 
-      // 3. Simpan data ke Firestore
-      await setDoc(doc(db, "users", cred.user.uid), {
-        uid:       cred.user.uid,
-        nama:      form.nama,
-        nip:       form.nip,
-        jabatan:   form.jabatan,
-        email:     form.email,
+      // Step 3: Simpan ke Firestore
+      const userData = {
+        uid,
+        nama:      form.nama.trim(),
+        nip:       form.nip.trim(),
+        jabatan:   form.jabatan.trim(),
+        email:     form.email.trim().toLowerCase(),
         role:      "user",
         status:    "aktif",
         fotoURL:   "",
         createdAt: new Date().toISOString(),
-      });
+      };
+
+      await setDoc(doc(db, "users", uid), userData);
 
       setSuccess("Akun berhasil dibuat! Mengarahkan ke halaman login...");
       setTimeout(() => navigate("/login"), 2000);
@@ -55,11 +61,9 @@ export default function Register() {
       } else if (err.code === "auth/invalid-email") {
         setError("Format email tidak valid!");
       } else if (err.code === "auth/weak-password") {
-        setError("Password terlalu lemah. Gunakan minimal 6 karakter.");
+        setError("Password terlalu lemah. Minimal 6 karakter.");
       } else if (err.code === "auth/network-request-failed") {
         setError("Tidak ada koneksi internet.");
-      } else if (err.code === "permission-denied" || err.message?.includes("permission")) {
-        setError("Akun dibuat tapi gagal simpan data. Coba login langsung.");
       } else {
         setError("Error: " + (err.code || err.message || "Tidak diketahui"));
       }
