@@ -24,15 +24,28 @@ export default function Register() {
     if (form.password !== form.password2) return setError("Password tidak sama!");
     if (form.password.length < 6) return setError("Password minimal 6 karakter!");
 
-    const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "user")));
-    if (usersSnap.size >= 4) return setError("Batas maksimal 4 user sudah tercapai. Hubungi admin.");
-
-    const nipSnap = await getDocs(query(collection(db, "users"), where("nip", "==", form.nip)));
-    if (!nipSnap.empty) return setError("NIP sudah terdaftar!");
-
     setLoading(true);
     try {
+      // Buat akun dulu
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+
+      // Cek jumlah user & NIP setelah auth (sudah login)
+      const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "user")));
+      if (usersSnap.size >= 4) {
+        // Hapus akun yang baru dibuat karena melebihi batas
+        await cred.user.delete();
+        setLoading(false);
+        return setError("Batas maksimal 4 user sudah tercapai. Hubungi admin.");
+      }
+
+      const nipSnap = await getDocs(query(collection(db, "users"), where("nip", "==", form.nip)));
+      if (!nipSnap.empty) {
+        await cred.user.delete();
+        setLoading(false);
+        return setError("NIP sudah terdaftar!");
+      }
+
+      // Simpan data user ke Firestore
       await setDoc(doc(db, "users", cred.user.uid), {
         uid: cred.user.uid,
         nama: form.nama,
@@ -43,11 +56,14 @@ export default function Register() {
         fotoURL: "",
         createdAt: new Date().toISOString(),
       });
+
       setSuccess("Akun berhasil dibuat! Mengarahkan ke halaman login...");
       setTimeout(() => navigate("/login"), 2000);
     } catch (err) {
       if (err.code === "auth/email-already-in-use") setError("Email sudah terdaftar!");
+      else if (err.code === "auth/invalid-email") setError("Format email tidak valid!");
       else setError("Gagal mendaftar. Coba lagi.");
+      console.error(err);
     } finally {
       setLoading(false);
     }
