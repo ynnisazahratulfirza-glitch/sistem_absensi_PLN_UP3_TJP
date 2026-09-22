@@ -29,7 +29,10 @@ export default function Register() {
       // 1. Buat akun Firebase Auth
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
 
-      // 2. Simpan data ke Firestore (simpel, tanpa query dulu)
+      // 2. Paksa refresh token — pastikan Firestore sudah dapat auth token
+      await cred.user.getIdToken(true);
+
+      // 3. Simpan data ke Firestore
       await setDoc(doc(db, "users", cred.user.uid), {
         uid:       cred.user.uid,
         nama:      form.nama,
