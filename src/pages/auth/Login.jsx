@@ -20,7 +20,16 @@ export default function Login() {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", cred.user.uid));
-      const role = snap.exists() ? snap.data().role : null;
+      if (!snap.exists()) {
+        setError("Akun tidak ditemukan.");
+        return;
+      }
+      const data = snap.data();
+      if (data.status === "nonaktif") {
+        setError("Akun Anda telah dinonaktifkan. Hubungi admin.");
+        return;
+      }
+      const role = data.role;
       navigate(role === "admin" ? "/admin" : "/user", { replace: true });
     } catch (err) {
       setError("Email atau password salah. Silakan coba lagi.");
