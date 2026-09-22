@@ -32,8 +32,8 @@ export default function Login() {
 
       const data = snap.data();
 
-      // Akun nonaktif
-      if (data.status === "nonaktif") {
+      // Akun nonaktif atau deleted
+      if (data.status === "nonaktif" || data.status === "deleted") {
         await signOut(auth);
         setError("Akun Anda telah dinonaktifkan. Hubungi admin.");
         setLoading(false);

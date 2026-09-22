@@ -1,6 +1,6 @@
 // pages/admin/Karyawan.jsx
 import { useEffect, useState } from "react";
-import { collection, getDocs, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
@@ -18,7 +18,7 @@ export default function AdminKaryawan() {
       const snap = await getDocs(collection(db, "users"));
       const list = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((u) => u.role === "user")
+        .filter((u) => u.role === "user" && u.status !== "deleted")
         .sort((a, b) => (a.nama || "").localeCompare(b.nama || ""));
       setUsers(list);
     } catch (e) { console.error(e); }
@@ -38,12 +38,16 @@ export default function AdminKaryawan() {
     setProcessing(false);
   };
 
-  // Hapus user
+  // Hapus user - tandai deleted di Firestore (Auth tidak bisa dihapus dari client)
   const handleHapus = async () => {
     setProcessing(true);
     try {
-      await deleteDoc(doc(db, "users", confirm.id));
-      setUsers((prev) => prev.filter((u) => u.id !== confirm.id));
+      // Tandai sebagai deleted agar tidak bisa login
+      await updateDoc(doc(db, "users", confirm.id), {
+        status: "deleted",
+        deletedAt: new Date().toISOString(),
+      });
+      await fetchUsers();
       setConfirm(null);
     } catch (e) { console.error(e); }
     setProcessing(false);

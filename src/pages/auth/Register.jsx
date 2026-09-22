@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, setDoc, collection, getDocs, query, where, getDoc } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
 
 export default function Register() {
@@ -10,7 +10,7 @@ export default function Register() {
   const [form, setForm] = useState({
     nama: "", nip: "", jabatan: "", email: "", password: "", password2: "",
   });
-  const [error, setError] = useState("");
+  const [error,   setError]   = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
@@ -26,43 +26,61 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // Buat akun dulu
+      // Buat akun Firebase Auth
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const uid  = cred.user.uid;
 
-      // Cek jumlah user & NIP setelah auth (sudah login)
-      const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "user")));
-      if (usersSnap.size >= 4) {
-        // Hapus akun yang baru dibuat karena melebihi batas
+      // Cek batas 4 user aktif
+      const usersSnap = await getDocs(
+        query(collection(db, "users"), where("role", "==", "user"))
+      );
+      const aktif = usersSnap.docs.filter(
+        (d) => d.data().status !== "deleted" && d.data().status !== "nonaktif"
+      );
+      if (aktif.length >= 4) {
         await cred.user.delete();
+        setError("Batas maksimal 4 user aktif sudah tercapai. Hubungi admin.");
         setLoading(false);
-        return setError("Batas maksimal 4 user sudah tercapai. Hubungi admin.");
+        return;
       }
 
-      const nipSnap = await getDocs(query(collection(db, "users"), where("nip", "==", form.nip)));
+      // Cek NIP duplikat
+      const nipSnap = await getDocs(
+        query(collection(db, "users"), where("nip", "==", form.nip))
+      );
       if (!nipSnap.empty) {
         await cred.user.delete();
+        setError("NIP sudah terdaftar!");
         setLoading(false);
-        return setError("NIP sudah terdaftar!");
+        return;
       }
 
-      // Simpan data user ke Firestore
-      await setDoc(doc(db, "users", cred.user.uid), {
-        uid: cred.user.uid,
-        nama: form.nama,
-        nip: form.nip,
-        jabatan: form.jabatan,
-        email: form.email,
-        role: "user",
-        fotoURL: "",
+      // Simpan ke Firestore
+      await setDoc(doc(db, "users", uid), {
+        uid,
+        nama:      form.nama,
+        nip:       form.nip,
+        jabatan:   form.jabatan,
+        email:     form.email,
+        role:      "user",
+        status:    "aktif",
+        fotoURL:   "",
         createdAt: new Date().toISOString(),
       });
 
       setSuccess("Akun berhasil dibuat! Mengarahkan ke halaman login...");
       setTimeout(() => navigate("/login"), 2000);
+
     } catch (err) {
-      if (err.code === "auth/email-already-in-use") setError("Email sudah terdaftar!");
-      else if (err.code === "auth/invalid-email") setError("Format email tidak valid!");
-      else setError("Gagal mendaftar. Coba lagi.");
+      if (err.code === "auth/email-already-in-use") {
+        setError("Email sudah terdaftar. Gunakan email lain atau langsung login.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Format email tidak valid!");
+      } else if (err.code === "auth/weak-password") {
+        setError("Password terlalu lemah. Minimal 6 karakter.");
+      } else {
+        setError("Gagal mendaftar: " + (err.message || "Coba lagi."));
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -78,35 +96,34 @@ export default function Register() {
         <div className="form-row">
           <div className="form-group">
             <label>Nama Lengkap</label>
-            <input type="text" placeholder="Nama lengkap" value={form.nama} onChange={set("nama")} required />
+            <input type="text" placeholder="Nama lengkap"
+              value={form.nama} onChange={set("nama")} required />
           </div>
           <div className="form-group">
             <label>NIP / ID Karyawan</label>
-            <input type="text" placeholder="NIP001" value={form.nip} onChange={set("nip")} required />
+            <input type="text" placeholder="NIP001"
+              value={form.nip} onChange={set("nip")} required />
           </div>
         </div>
 
         <div className="form-group">
           <label>Jabatan</label>
-          <input type="text" placeholder="Contoh: Teknisi Listrik" value={form.jabatan} onChange={set("jabatan")} required />
+          <input type="text" placeholder="Contoh: Teknisi Listrik"
+            value={form.jabatan} onChange={set("jabatan")} required />
         </div>
 
         <div className="form-group">
           <label>Email</label>
-          <input type="email" placeholder="email@gmail.com" value={form.email} onChange={set("email")} required />
+          <input type="email" placeholder="email@gmail.com"
+            value={form.email} onChange={set("email")} required />
         </div>
 
         <div className="form-row">
           <div className="form-group">
             <label>Password</label>
             <div className="input-wrap">
-              <input
-                type={showPass ? "text" : "password"}
-                placeholder="Min. 6 karakter"
-                value={form.password}
-                onChange={set("password")}
-                required minLength={6}
-              />
+              <input type={showPass ? "text" : "password"} placeholder="Min. 6 karakter"
+                value={form.password} onChange={set("password")} required minLength={6} />
               <button type="button" className="eye-btn" onClick={() => setShowPass(!showPass)}>
                 {showPass ? "Sembunyikan" : "Tampilkan"}
               </button>
@@ -115,18 +132,13 @@ export default function Register() {
           <div className="form-group">
             <label>Konfirmasi Password</label>
             <div className="input-wrap">
-              <input
-                type={showPass ? "text" : "password"}
-                placeholder="Ulangi password"
-                value={form.password2}
-                onChange={set("password2")}
-                required
-              />
+              <input type={showPass ? "text" : "password"} placeholder="Ulangi password"
+                value={form.password2} onChange={set("password2")} required />
             </div>
           </div>
         </div>
 
-        {error && <div className="alert alert-error">{error}</div>}
+        {error   && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
         <button type="submit" className="btn btn-primary w-full" disabled={loading}>
