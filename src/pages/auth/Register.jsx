@@ -78,10 +78,14 @@ export default function Register() {
         setError("Format email tidak valid!");
       } else if (err.code === "auth/weak-password") {
         setError("Password terlalu lemah. Minimal 6 karakter.");
+      } else if (err.code === "auth/network-request-failed") {
+        setError("Gagal koneksi. Periksa internet Anda.");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Terlalu banyak percobaan. Tunggu beberapa menit.");
       } else {
-        setError("Gagal mendaftar: " + (err.message || "Coba lagi."));
+        setError("Gagal mendaftar: " + (err.code || err.message || "Coba lagi."));
       }
-      console.error(err);
+      console.error("Register error:", err.code, err.message);
     } finally {
       setLoading(false);
     }
