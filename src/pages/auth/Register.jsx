@@ -51,15 +51,17 @@ export default function Register() {
     } catch (err) {
       console.error("Register error:", err.code, err.message);
       if (err.code === "auth/email-already-in-use") {
-        setError("Email sudah terdaftar. Silakan login atau gunakan email lain.");
+        setError("Email sudah terdaftar. Gunakan email lain.");
       } else if (err.code === "auth/invalid-email") {
         setError("Format email tidak valid!");
       } else if (err.code === "auth/weak-password") {
         setError("Password terlalu lemah. Gunakan minimal 6 karakter.");
       } else if (err.code === "auth/network-request-failed") {
-        setError("Tidak ada koneksi internet. Coba lagi.");
+        setError("Tidak ada koneksi internet.");
+      } else if (err.code === "permission-denied" || err.message?.includes("permission")) {
+        setError("Akun dibuat tapi gagal simpan data. Coba login langsung.");
       } else {
-        setError("Gagal mendaftar (" + (err.code || err.message) + ")");
+        setError("Error: " + (err.code || err.message || "Tidak diketahui"));
       }
     } finally {
       setLoading(false);
