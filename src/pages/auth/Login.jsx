@@ -1,9 +1,11 @@
-// pages/auth/Login.jsx
+// pages/auth/Login.jsx - FINAL FIX
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default function Login() {
   const navigate  = useNavigate();
@@ -19,20 +21,48 @@ export default function Login() {
     setLoading(true);
 
     try {
+      // Login ke Firebase Auth
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db, "users", cred.user.uid));
 
-      // Akun tidak ada di Firestore — buat dokumen darurat
-      if (!snap.exists()) {
+      // Tunggu sebentar agar Firestore sync
+      await sleep(300);
+
+      // Coba ambil dokumen user — retry sampai 3x
+      let snap = null;
+      for (let i = 0; i < 3; i++) {
+        snap = await getDoc(doc(db, "users", cred.user.uid));
+        if (snap.exists()) break;
+        await sleep(500);
+      }
+
+      // Masih tidak ada setelah retry
+      if (!snap || !snap.exists()) {
+        // Cek apakah ini admin (email admin hardcoded sebagai fallback)
+        if (email === "admin@gmail.com") {
+          // Buat dokumen admin jika belum ada
+          await setDoc(doc(db, "users", cred.user.uid), {
+            uid: cred.user.uid,
+            nama: "Administrator",
+            nip: "ADMIN001",
+            jabatan: "Administrator Sistem",
+            email: "admin@gmail.com",
+            role: "admin",
+            status: "aktif",
+            fotoURL: "",
+            createdAt: new Date().toISOString(),
+          });
+          navigate("/admin", { replace: true });
+          return;
+        }
         await signOut(auth);
-        setError("Akun ditemukan tapi data tidak lengkap. Silakan daftar ulang.");
+        setError("Data akun tidak ditemukan. Silakan daftar ulang.");
         setLoading(false);
         return;
       }
 
       const data = snap.data();
 
-      // Akun nonaktif atau deleted
+      // Cek status akun
       if (data.status === "nonaktif" || data.status === "deleted") {
         await signOut(auth);
         setError("Akun Anda telah dinonaktifkan. Hubungi admin.");
@@ -40,11 +70,11 @@ export default function Login() {
         return;
       }
 
-      // Sukses — arahkan sesuai role
+      // Sukses
       navigate(data.role === "admin" ? "/admin" : "/user", { replace: true });
 
     } catch (err) {
-      // Firebase error: wrong password / email not found
+      console.error("Login error:", err.code, err.message);
       const code = err.code;
       if (
         code === "auth/user-not-found" ||
@@ -52,9 +82,11 @@ export default function Login() {
         code === "auth/invalid-credential" ||
         code === "auth/invalid-email"
       ) {
-        setError("Email atau password tidak terdaftar.");
+        setError("Email atau password salah.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Terlalu banyak percobaan. Tunggu beberapa menit.");
       } else {
-        setError("Gagal masuk. Periksa koneksi internet Anda.");
+        setError("Gagal login: " + (code || err.message));
       }
       setLoading(false);
     }
@@ -93,11 +125,8 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Pesan error */}
         {error && (
-          <div className="alert alert-error" style={{ marginBottom: 12 }}>
-            {error}
-          </div>
+          <div className="alert alert-error">{error}</div>
         )}
 
         <button type="submit" className="btn btn-primary w-full" disabled={loading}>
