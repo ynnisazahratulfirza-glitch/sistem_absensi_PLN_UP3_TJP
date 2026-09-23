@@ -1,6 +1,6 @@
 // pages/admin/Karyawan.jsx
 import { useEffect, useState } from "react";
-import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
+import { collection, getDocs, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
@@ -38,15 +38,11 @@ export default function AdminKaryawan() {
     setProcessing(false);
   };
 
-  // Hapus user - tandai deleted di Firestore (Auth tidak bisa dihapus dari client)
+  // Hapus user permanen dari Firestore
   const handleHapus = async () => {
     setProcessing(true);
     try {
-      // Tandai sebagai deleted agar tidak bisa login
-      await updateDoc(doc(db, "users", confirm.id), {
-        status: "deleted",
-        deletedAt: new Date().toISOString(),
-      });
+      await deleteDoc(doc(db, "users", confirm.id));
       await fetchUsers();
       setConfirm(null);
     } catch (e) { console.error(e); }
