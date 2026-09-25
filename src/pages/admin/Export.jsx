@@ -8,16 +8,16 @@ export default function AdminExport() {
   const [loading, setLoading] = useState("");
 
   const toCSV = (headers, rows) => {
-    // Pakai semicolon sebagai separator agar Excel langsung terbaca rapi
-    const sep = ";";
+    // Tab separator - universal untuk semua versi Excel
+    const sep = "\t";
     const lines = [headers.join(sep)];
-    rows.forEach((r) => lines.push(r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(sep)));
+    rows.forEach((r) => lines.push(r.map((v) => String(v ?? "")).join(sep)));
     return lines.join("\n");
   };
 
   const downloadCSV = (content, filename) => {
-    // BOM untuk Excel agar langsung terbaca dengan encoding UTF-8
-    const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+    // Simpan sebagai .xls dengan tab separator - Excel langsung buka rapi
+    const blob = new Blob(["\uFEFF" + content], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href = url; a.download = filename; a.click();
@@ -43,7 +43,7 @@ export default function AdminExport() {
         });
 
       const headers = ["No","Nama","NIP","Jabatan","Tanggal","Jam Masuk","Jam Keluar","Status","Keterangan"];
-      downloadCSV(toCSV(headers, rows), `Rekap_Absensi_${month}.csv`);
+      downloadCSV(toCSV(headers, rows), `Rekap_Absensi_${month}.xls`);
     } catch (e) {
       console.error(e);
       alert("Gagal export: " + e.message);
@@ -83,7 +83,7 @@ export default function AdminExport() {
         });
 
       const headers = ["No","Nama","NIP","Tanggal","Jam Mulai","Jam Selesai","Jumlah Jam","Total Jam (Bulan)","Nukonfiden","Keterangan"];
-      downloadCSV(toCSV(headers, rows), `Rekap_Lembur_${month}.csv`);
+      downloadCSV(toCSV(headers, rows), `Rekap_Lembur_${month}.xls`);
     } catch (e) {
       console.error(e);
       alert("Gagal export: " + e.message);
