@@ -7,17 +7,26 @@ export default function AdminExport() {
   const [month, setMonth]     = useState(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState("");
 
-  const toCSV = (headers, rows) => {
-    // Tab separator - universal untuk semua versi Excel
-    const sep = "\t";
-    const lines = [headers.join(sep)];
-    rows.forEach((r) => lines.push(r.map((v) => String(v ?? "")).join(sep)));
-    return lines.join("\n");
+  const toExcel = (headers, rows) => {
+    // Format HTML table - Excel buka langsung rapi per kolom
+    const headerRow = headers.map(h => `<th style="background:#1e3a8a;color:white;padding:6px 10px;border:1px solid #ccc;font-weight:bold;">${h}</th>`).join("");
+    const dataRows = rows.map((r, i) =>
+      `<tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}">` +
+      r.map(v => `<td style="padding:5px 10px;border:1px solid #ddd;">${v ?? ""}</td>`).join("") +
+      `</tr>`
+    ).join("");
+    return `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head><meta charset="UTF-8">
+      <style>table{border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;}</style>
+      </head><body>
+      <table><thead><tr>${headerRow}</tr></thead><tbody>${dataRows}</tbody></table>
+      </body></html>
+    `;
   };
 
-  const downloadCSV = (content, filename) => {
-    // Simpan sebagai .xls dengan tab separator - Excel langsung buka rapi
-    const blob = new Blob(["\uFEFF" + content], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const downloadExcel = (content, filename) => {
+    const blob = new Blob([content], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href = url; a.download = filename; a.click();
@@ -43,7 +52,7 @@ export default function AdminExport() {
         });
 
       const headers = ["No","Nama","NIP","Jabatan","Tanggal","Jam Masuk","Jam Keluar","Status","Keterangan"];
-      downloadCSV(toCSV(headers, rows), `Rekap_Absensi_${month}.xls`);
+      downloadExcel(toExcel(headers, rows), `Rekap_Absensi_${month}.xls`);
     } catch (e) {
       console.error(e);
       alert("Gagal export: " + e.message);
@@ -83,7 +92,7 @@ export default function AdminExport() {
         });
 
       const headers = ["No","Nama","NIP","Tanggal","Jam Mulai","Jam Selesai","Jumlah Jam","Total Jam (Bulan)","Nukonfiden","Keterangan"];
-      downloadCSV(toCSV(headers, rows), `Rekap_Lembur_${month}.xls`);
+      downloadExcel(toExcel(headers, rows), `Rekap_Lembur_${month}.xls`);
     } catch (e) {
       console.error(e);
       alert("Gagal export: " + e.message);
