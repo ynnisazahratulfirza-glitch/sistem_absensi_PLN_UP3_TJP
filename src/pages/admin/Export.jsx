@@ -1,10 +1,10 @@
 // pages/admin/Export.jsx
 import { useState } from "react";
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 
 export default function AdminExport() {
-  const [month, setMonth]   = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth]     = useState(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState("");
 
   const toCSV = (headers, rows) => {
@@ -23,39 +23,68 @@ export default function AdminExport() {
 
   const exportAbsensi = async () => {
     setLoading("absensi");
-    const snap      = await getDocs(query(collection(db, "absensi"), where("bulan", "==", month), orderBy("tanggal")));
-    const usersSnap = await getDocs(collection(db, "users"));
-    const userMap   = {};
-    usersSnap.docs.forEach((d) => { userMap[d.data().uid] = d.data(); });
+    try {
+      // Ambil semua absensi bulan ini tanpa orderBy
+      const snap      = await getDocs(query(collection(db, "absensi"), where("bulan", "==", month)));
+      const usersSnap = await getDocs(collection(db, "users"));
+      const userMap   = {};
+      usersSnap.docs.forEach((d) => { userMap[d.data().uid] = d.data(); });
 
-    const headers = ["No","Nama","NIP","Jabatan","Tanggal","Jam Masuk","Jam Keluar","Status","Keterangan"];
-    const rows    = snap.docs.map((d, i) => {
-      const data = d.data(); const u = userMap[data.uid] || {};
-      return [i+1, u.nama, u.nip, u.jabatan, data.tanggal, data.jamMasuk, data.jamKeluar, data.status, data.keterangan];
-    });
-    downloadCSV(toCSV(headers, rows), `absensi_${month}.csv`);
+      // Sort di client
+      const rows = snap.docs
+        .map((d) => d.data())
+        .sort((a, b) => (a.tanggal || "").localeCompare(b.tanggal || ""))
+        .map((data, i) => {
+          const u = userMap[data.uid] || {};
+          return [i + 1, u.nama, u.nip, u.jabatan, data.tanggal, data.jamMasuk, data.jamKeluar, data.status, data.keterangan];
+        });
+
+      const headers = ["No","Nama","NIP","Jabatan","Tanggal","Jam Masuk","Jam Keluar","Status","Keterangan"];
+      downloadCSV(toCSV(headers, rows), `absensi_${month}.csv`);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal export: " + e.message);
+    }
     setLoading("");
   };
 
   const exportLembur = async () => {
     setLoading("lembur");
-    const snap      = await getDocs(query(collection(db, "lembur"), where("bulan", "==", month), orderBy("tanggal")));
-    const usersSnap = await getDocs(collection(db, "users"));
-    const userMap   = {};
-    usersSnap.docs.forEach((d) => { userMap[d.data().uid] = d.data(); });
+    try {
+      // Ambil semua lembur tanpa orderBy, filter di client
+      const snap      = await getDocs(collection(db, "lembur"));
+      const usersSnap = await getDocs(collection(db, "users"));
+      const userMap   = {};
+      usersSnap.docs.forEach((d) => { userMap[d.data().uid] = d.data(); });
 
-    const totalPerUser = {};
-    snap.docs.forEach((d) => {
-      const { uid, jumlahJam } = d.data();
-      totalPerUser[uid] = (totalPerUser[uid] || 0) + (jumlahJam || 0);
-    });
+      const totalPerUser = {};
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        const bulan = data.bulan || (data.tanggal || "").slice(0, 7);
+        if (bulan === month) {
+          totalPerUser[data.uid] = (totalPerUser[data.uid] || 0) + (data.jumlahJam || 0);
+        }
+      });
 
-    const headers = ["No","Nama","NIP","Tanggal","Jam Mulai","Jam Selesai","Jumlah Jam","Total Jam (Bulan)","Nukonfiden","Keterangan"];
-    const rows    = snap.docs.map((d, i) => {
-      const data = d.data(); const u = userMap[data.uid] || {};
-      return [i+1, u.nama, u.nip, data.tanggal, data.jamMulai, data.jamSelesai, data.jumlahJam, totalPerUser[data.uid], data.nukonfiden, data.keterangan];
-    });
-    downloadCSV(toCSV(headers, rows), `lembur_${month}.csv`);
+      const rows = snap.docs
+        .map((d) => d.data())
+        .filter((data) => {
+          const bulan = data.bulan || (data.tanggal || "").slice(0, 7);
+          return bulan === month;
+        })
+        .sort((a, b) => (a.tanggal || "").localeCompare(b.tanggal || ""))
+        .map((data, i) => {
+          const u = userMap[data.uid] || {};
+          return [i + 1, u.nama, u.nip, data.tanggal, data.jamMulai, data.jamSelesai,
+            data.jumlahJam, totalPerUser[data.uid] || 0, data.nukonfiden, data.keterangan];
+        });
+
+      const headers = ["No","Nama","NIP","Tanggal","Jam Mulai","Jam Selesai","Jumlah Jam","Total Jam (Bulan)","Nukonfiden","Keterangan"];
+      downloadCSV(toCSV(headers, rows), `lembur_${month}.csv`);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal export: " + e.message);
+    }
     setLoading("");
   };
 
@@ -76,16 +105,24 @@ export default function AdminExport() {
           <h3>Download Rekap Data</h3>
           <p>Export data ke format CSV untuk dibuka di Microsoft Excel</p>
 
-          <div className="form-group" style={{ maxWidth: 260, margin: "0 auto 24px" }}>
+          <div className="form-group" style={{ maxWidth: 260, margin: "16px auto" }}>
             <label>Pilih Bulan</label>
             <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </div>
 
           <div className="export-btn-row">
-            <button className="btn btn-primary" onClick={exportAbsensi} disabled={loading === "absensi"}>
+            <button
+              className="btn btn-primary"
+              onClick={exportAbsensi}
+              disabled={loading === "absensi"}
+            >
               {loading === "absensi" ? "Memproses..." : "Download Absensi"}
             </button>
-            <button className="btn btn-warning" onClick={exportLembur} disabled={loading === "lembur"}>
+            <button
+              className="btn btn-warning"
+              onClick={exportLembur}
+              disabled={loading === "lembur"}
+            >
               {loading === "lembur" ? "Memproses..." : "Download Lembur"}
             </button>
           </div>
