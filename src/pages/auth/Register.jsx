@@ -1,12 +1,10 @@
-// pages/auth/Register.jsx - build 111126
+// pages/auth/Register.jsx - final
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../lib/firebase";
+import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth } from "../../lib/firebase";
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
+// Data sementara disimpan di localStorage, lalu ditulis ke Firestore saat login pertama
 export default function Register() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ nama: "", nip: "", jabatan: "", email: "", password: "", password2: "" });
@@ -22,13 +20,17 @@ export default function Register() {
     setError(""); setSuccess("");
     if (form.password !== form.password2) return setError("Password tidak sama!");
     if (form.password.length < 6) return setError("Password minimal 6 karakter!");
+
     setLoading(true);
     try {
+      // Buat akun di Firebase Auth
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      await cred.user.getIdToken(true);
-      await sleep(800);
-      await setDoc(doc(db, "users", cred.user.uid), {
-        uid: cred.user.uid,
+      const uid = cred.user.uid;
+
+      // Simpan data profil ke localStorage sementara
+      // Akan ditulis ke Firestore saat login pertama kali (token sudah valid)
+      localStorage.setItem("pendingUserData", JSON.stringify({
+        uid,
         nama: form.nama.trim(),
         nip: form.nip.trim(),
         jabatan: form.jabatan.trim(),
@@ -37,9 +39,14 @@ export default function Register() {
         status: "aktif",
         fotoURL: "",
         createdAt: new Date().toISOString(),
-      });
-      setSuccess("Akun berhasil dibuat! Mengarahkan ke halaman login...");
-      setTimeout(() => navigate("/login"), 2000);
+      }));
+
+      // Logout dulu, minta user login manual agar token Firestore fresh
+      await signOut(auth);
+
+      setSuccess("Akun berhasil dibuat! Silakan login.");
+      setTimeout(() => navigate("/login"), 1500);
+
     } catch (err) {
       console.error("Register error:", err.code, err.message);
       if (err.code === "auth/email-already-in-use") setError("Email sudah terdaftar. Gunakan email lain.");

@@ -1,4 +1,3 @@
-// pages/auth/Login.jsx - FINAL FIX
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
@@ -21,39 +20,32 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Login ke Firebase Auth
       const cred = await signInWithEmailAndPassword(auth, email, password);
+      const uid  = cred.user.uid;
 
-      // Tunggu sebentar agar Firestore sync
-      await sleep(300);
+      // Cek apakah ada data pending dari register
+      const pending = localStorage.getItem("pendingUserData");
+      if (pending) {
+        try {
+          const userData = JSON.parse(pending);
+          if (userData.uid === uid) {
+            await setDoc(doc(db, "users", uid), userData);
+            localStorage.removeItem("pendingUserData");
+          }
+        } catch (e) {
+          console.error("Failed to save pending user data:", e);
+        }
+      }
 
-      // Coba ambil dokumen user — retry sampai 3x
+      // Ambil data user dengan retry
       let snap = null;
-      for (let i = 0; i < 3; i++) {
-        snap = await getDoc(doc(db, "users", cred.user.uid));
+      for (let i = 0; i < 4; i++) {
+        snap = await getDoc(doc(db, "users", uid));
         if (snap.exists()) break;
         await sleep(500);
       }
 
-      // Masih tidak ada setelah retry
       if (!snap || !snap.exists()) {
-        // Cek apakah ini admin (email admin hardcoded sebagai fallback)
-        if (email === "admin@gmail.com") {
-          // Buat dokumen admin jika belum ada
-          await setDoc(doc(db, "users", cred.user.uid), {
-            uid: cred.user.uid,
-            nama: "Administrator",
-            nip: "ADMIN001",
-            jabatan: "Administrator Sistem",
-            email: "admin@gmail.com",
-            role: "admin",
-            status: "aktif",
-            fotoURL: "",
-            createdAt: new Date().toISOString(),
-          });
-          navigate("/admin", { replace: true });
-          return;
-        }
         await signOut(auth);
         setError("Data akun tidak ditemukan. Silakan daftar ulang.");
         setLoading(false);
@@ -61,8 +53,6 @@ export default function Login() {
       }
 
       const data = snap.data();
-
-      // Cek status akun
       if (data.status === "nonaktif" || data.status === "deleted") {
         await signOut(auth);
         setError("Akun Anda telah dinonaktifkan. Hubungi admin.");
@@ -70,18 +60,12 @@ export default function Login() {
         return;
       }
 
-      // Sukses
       navigate(data.role === "admin" ? "/admin" : "/user", { replace: true });
 
     } catch (err) {
-      console.error("Login error:", err.code, err.message);
       const code = err.code;
-      if (
-        code === "auth/user-not-found" ||
-        code === "auth/wrong-password" ||
-        code === "auth/invalid-credential" ||
-        code === "auth/invalid-email"
-      ) {
+      if (code === "auth/user-not-found" || code === "auth/wrong-password" ||
+          code === "auth/invalid-credential" || code === "auth/invalid-email") {
         setError("Email atau password salah.");
       } else if (code === "auth/too-many-requests") {
         setError("Terlalu banyak percobaan. Tunggu beberapa menit.");
