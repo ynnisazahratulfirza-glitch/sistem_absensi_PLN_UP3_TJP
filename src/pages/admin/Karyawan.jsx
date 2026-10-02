@@ -83,7 +83,7 @@ export default function AdminKaryawan() {
       <div className="card">
         <div className="card-header-bar">
           <span className="count-badge">
-            {users.length} / 4 slot terpakai
+            Total karyawan terdaftar: {users.length}
           </span>
         </div>
 
